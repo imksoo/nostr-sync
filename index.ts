@@ -5,19 +5,17 @@ import { RelayPool } from "nostr-relaypool";
 import { NostrFetcher } from "nostr-fetch";
 
 const SECKEY = process.env.SECKEY || "";
-if (!process.env.SECKEY) {
-  console.error("秘密鍵を環境変数か.envファイルにSECKEYとして定義してください")
+const PUBKEY = process.env.PUBKEY || ""
+if (!process.env.SECKEY || !process.env.PUBKEY) {
+  console.error("秘密鍵と公開鍵を環境変数か.envファイルにSECKEYとして定義してください")
   process.exit(1);
 }
 
 const loggingInterval = 10 * 60 * 1000;
 const maxQueueLength = 20;
 
-const feedRelays = ["wss://relay.nostr.wirednet.jp/"];
-const pool = new RelayPool(undefined, {
-  autoReconnect: true,
-  logErrorsAndNotices: true,
-});
+const feedRelays = ["ws://localhost:8888"];
+const pool = new RelayPool(feedRelays);
 
 postMessage("新旧リレーのコピー処理を開始したよ");
 
@@ -146,3 +144,16 @@ function postMessage(message: string): void {
   post.content = message;
   pool.publish(Nostr.finishEvent(post, SECKEY), feedRelays);
 }
+
+pool.subscribe([
+  {
+    kinds: [1],
+    "#p": [PUBKEY],
+  }
+],
+  feedRelays,
+  (event, _isAfterEose, _relayUrl) => {
+    if (event.content.includes("status")) {
+      printStatus();
+    }
+  });
