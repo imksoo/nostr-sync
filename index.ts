@@ -10,7 +10,8 @@ if (!process.env.SECKEY) {
   process.exit(1);
 }
 
-const loggingInterval = 5 * 1000;
+const loggingInterval = 60 * 1000;
+const maxQueueLength = 10;
 
 const feedRelays = ["wss://relay.nostr.wirednet.jp/"];
 const pool = new RelayPool(undefined, {
@@ -19,6 +20,17 @@ const pool = new RelayPool(undefined, {
 });
 
 postMessage("新旧リレーのコピー処理を開始したよ");
+
+process.on('SIGINT', async () => {
+  printStatus();
+  postMessage("新旧リレーのコピー処理がCtrl+Cで途中終了されたよ");
+
+  await Promise.all(promises);
+
+  setTimeout(() => {
+    process.exit();
+  }, 3 * 1000)
+});
 
 let receivedEvents = 0;
 let ackedEvents = 0;
@@ -30,6 +42,7 @@ const srcRelay = "ws://localhost:8080";
 const dstRelay = 'ws://localhost:8888';
 
 const resolveResponseMap = new Map<string, (value?: void) => void>();
+let promises: Promise<void>[] = [];
 
 const sync = async () => {
   const fetcher = NostrFetcher.init();
@@ -42,6 +55,10 @@ const sync = async () => {
   );
 
   for await (const ev of eventsIter) {
+    if (promises.length > maxQueueLength) {
+      await Promise.race(promises);
+    }
+
     const event_json = JSON.stringify(['EVENT', ev]);
     ++receivedEvents;
 
@@ -55,10 +72,18 @@ const sync = async () => {
     const responseReceived = new Promise<void>(resolve => {
       resolveResponseMap.set(ev.id, resolve);
     });
+    responseReceived.then(() => {
+      const index = promises.indexOf(responseReceived);
+      if (index > -1) {
+        promises.splice(index, 1);
+      }
+    });
 
     dstSocket.send(event_json);
-    await responseReceived;
+    promises.push(responseReceived);
   }
+
+  await Promise.all(promises);
   fetcher.shutdown();
 };
 
@@ -99,6 +124,7 @@ function printStatus() {
   });
   const status = JSON.stringify({
     receivedEvents, ackedEvents, duplicatedEvents, nonDuplicatedEvents,
+    queueLength: promises.length,
     kinds: Object.fromEntries(eventKinds),
   }, undefined, 0);
   postMessage(`${now} の新旧リレー間の複製状況です。\n${status}`);
