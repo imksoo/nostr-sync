@@ -23,7 +23,7 @@ PUBKEY=your_public_key
 ```
 Replace `your_secret_key` and `your_public_key` with your Nostr keys.
 
-5. Start the script: `node sync.js`
+5. Start the script: `npx ts-node sync.ts`
 
 Make sure the script runs in an environment with a stable connection to the relays.
 
