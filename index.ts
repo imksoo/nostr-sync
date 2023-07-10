@@ -10,8 +10,8 @@ if (!process.env.SECKEY) {
   process.exit(1);
 }
 
-const loggingInterval = 60 * 1000;
-const maxQueueLength = 10;
+const loggingInterval = 10 * 60 * 1000;
+const maxQueueLength = 20;
 
 const feedRelays = ["wss://relay.nostr.wirednet.jp/"];
 const pool = new RelayPool(undefined, {
@@ -91,7 +91,12 @@ const dstSocket = new WebSocket(dstRelay);
 dstSocket.onopen = () => {
   sync()
     .then(() => {
-      console.log("fin")
+      printStatus();
+      postMessage("新旧リレーのコピー処理が正常終了したよ");
+
+      setTimeout(() => {
+        process.exit();
+      }, 3 * 1000)
     })
     .catch((e) => {
       console.error(e);
